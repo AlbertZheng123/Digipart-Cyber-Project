@@ -95,6 +95,3 @@ if __name__ == "__main__":
             print("class_func requires 1 parameter")
         else:
             class_func(args.params[0])
-
-# do all, dp-blacklist fixed value, pass in ip address text file
-# make into class, shared variable put as class v
