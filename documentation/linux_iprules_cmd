@@ -1,0 +1,63 @@
+LINUX DOCUMENTATION
+
+Block a Single IP:
+
+sudo firewall-cmd --permanent --add-rich-rule='rule family=ipv4 source address=23.21.86.108
+reject'
+sudo firewall-cmd --reload
+
+Unblock a single IP:
+
+sudo firewall-cmd --permanent --remove-rich-rule='rule family="ipv4" source address="23.21.86.108" reject'
+sudo firewall-cmd --reload
+
+Reset to Default:
+
+sudo rm -rf /etc/firewalld/zones
+
+Block Multiple IPs
+
+sudo ipset create blacklist hash:ip
+ipset add blacklist 23.21.86.108
+sudo iptables -I INPUT -m set --match-set blacklist src -j DROP
+
+Verify IPtables
+
+sudo iptables -L INPUT -v -n --line-numbers
+
+Delete IP list rule
+
+sudo iptables -D INPUT line number
+
+Display IP list
+
+Ipset list
+
+Given txt file
+
+sudo touch ips.txt
+sudo chown albert:albert ips.txt
+sudo echo "23.21.86.108" >> ips.txt
+sudo bash -c 'while read ip; do sudo ipset add blacklist $ip; done' < /home/albert/ips.txt
+
+
+REJECT vs DROP:
+
+REJECT: Discard packet and send error response back to sender
+DROP: Silently discard packet with no error response sent
+
+We should be choosing DROP for this case, as we do not want the sender to know that we have already dealt with the issue
+
+Public IP address of Linux Remote Server:
+
+curl ifconfig.me
+
+IPtables block single IP:
+
+sudo iptables -A INPUT -s 23.21.86.108 -j DROP
+
+We should be using IPtables, as a common-connected command system to use for both single and multiple IP blocking will be more organized than using FirewallD along with IPtables.
+
+Reset IPtable to default:
+
+sudo iptables -F
