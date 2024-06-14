@@ -1,6 +1,8 @@
 import subprocess
 import argparse
+#something else
 
+var1 = "test"
 class IpLinux:
     list_name = 'dp_blacklist'
 
