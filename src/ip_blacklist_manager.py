@@ -1,8 +1,24 @@
 import subprocess
 import argparse
+import re
+
+
+def is_valid_ip(ip):
+    # Define the regular expression for a valid IP address
+    ip_pattern = re.compile(r'^(\d{1,3}\.){3}\d{1,3}$')
+
+    # Check if the string matches the pattern
+    if ip_pattern.match(ip):
+        # Split the IP address into parts and check each part is between 0 and 255
+        parts = ip.split('.')
+        for part in parts:
+            if not 0 <= int(part) <= 255:
+                return False
+        return True
+    return False
 
 class BlackListManager:
-    """IpLinux is responsible for managing a list of IP addresses to be blacklisted on a linux remote server firewall
+    """IpLinux is responsible for managing a list of IP addresses to be blacklisted on a linux remote server firewall。 Internally uses Linux commands IpTables/IpSet/IpRules
     This class provides functionalities to:
 
     1. Create an IP List
@@ -12,14 +28,14 @@ class BlackListManager:
     5. Displaying all results"""
 
     iplist = 'dp_blacklist'
-
     def __init__(self, ip_list_file):
         self.ip_list_file = ip_list_file
+        self.valid_ip_count = 0
 
     def list_exists(self):
         result = subprocess.run(['sudo', 'ipset', 'list', self.iplist], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         if "Name:" in result.stdout:
-            print("Set can't be created")
+            print(f"{self.iplist} already exists")
             return False
         else:
             print("Set can be created")
@@ -31,63 +47,66 @@ class BlackListManager:
             print(f"{self.iplist} has been created in the ipset")
         return
 
-
     def add_ip_ipset(self):
-        first_result = subprocess.run(['sudo', 'ipset', 'list', self.iplist], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        first_result = subprocess.run(['sudo', 'ipset', 'list', self.iplist], stdout=subprocess.PIPE,
+                                      stderr=subprocess.PIPE, text=True)
         for line in first_result.stdout.splitlines():
             if line.startswith('Number of entries:'):
                 num_entries = line.split(':')[1].strip()
-                print(num_entries + " ips are in this list initially")
+                print(f"{num_entries} ips are in this list initially")
+                break
 
         with open(self.ip_list_file) as file:
             for ip in file:
-                stripped_ip = ip.strip()
-                result = subprocess.run(['sudo', 'ipset', 'test', self.iplist.encode(), stripped_ip.encode()], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                if "is NOT in set" in result.stderr:
-                    subprocess.run(['sudo', 'ipset', 'add', self.iplist.encode(), stripped_ip.encode()])
-                    print(f"{stripped_ip} added")
-                else:
-                    print("IP already in set")
-                    continue
-        last_result = subprocess.run(['sudo', 'ipset', 'list', self.iplist], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                if is_valid_ip(ip):
+                    self.valid_ip_count += 1
+                    stripped_ip = ip.strip()
+                    result = subprocess.run(['sudo', 'ipset', 'test', self.iplist.encode(), stripped_ip.encode()],
+                                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                    if "is NOT in set" in result.stderr:
+                        subprocess.run(['sudo', 'ipset', 'add', self.iplist.encode(), stripped_ip.encode()])
+                        print(f"{stripped_ip} added")
+                        break
+                    else:
+                        print("IP already in set")
+        last_result = subprocess.run(['sudo', 'ipset', 'list', self.iplist], stdout=subprocess.PIPE,
+                                     stderr=subprocess.PIPE, text=True)
         for line in last_result.stdout.splitlines():
             if line.startswith('Number of entries:'):
                 num_entries = line.split(':')[1].strip()
                 print(f"{num_entries} ips are in this list finally")
                 break
+
     def add_rule(self):
         list_name_encoded = self.iplist.encode()
         result = subprocess.run(['sudo', 'iptables', '-S'], stdout=subprocess.PIPE, text=True)
         rules = result.stdout.splitlines()
         exists = False
-        print(list_name_encoded)
         for rule in rules:
             if "INPUT -m set --match-set {} ".format(self.iplist) in rule and "DROP" in rule:
-                print(self.iplist + " already in")
+                print(f"{self.iplist} already in")
                 exists = True
-        if exists == False:
-            subprocess.run(['sudo', 'iptables', '-I', 'INPUT', '-m', 'set', '--match-set', list_name_encoded, 'src', '-j', 'DROP'])
+        if not exists:
+            subprocess.run(
+                ['sudo', 'iptables', '-I', 'INPUT', '-m', 'set', '--match-set', list_name_encoded, 'src', '-j', 'DROP'])
             print("added rule")
             return
+
     def display_results(self):
         line_number = sum(1 for line in open(self.ip_list_file))
-        ip_rules_result = subprocess.run(['sudo', 'iptables', '-S'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        ip_rules_result = subprocess.run(['sudo', 'iptables', '-S'], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                         text=True)
         rules = ip_rules_result.stdout.splitlines()
         for rule in rules:
             if self.iplist + " " in rule:
                 print(rule)
         print("line numbers in doc is " + str(line_number))
+
     def do_all(self):
-        print("at stage 1")
         self.create_iplist()
         self.add_ip_ipset()
         self.add_rule()
         self.display_results()
-
-
-def class_func(filename):
-    obj1 = BlackListManager(filename)
-    obj1.do_all()
 
 
 if __name__ == "__main__":
@@ -96,8 +115,14 @@ if __name__ == "__main__":
     parser.add_argument('params', nargs='*', help='The parameters to pass to the function')
     args = parser.parse_args()
 
-    if args.function == 'class_func':
+
+    def block_ips(filename):
+        obj1 = BlackListManager(filename)
+        obj1.do_all()
+
+
+    if args.function == 'block_ips':
         if len(args.params) != 1:
             print("class_func requires 1 parameter")
         else:
-            class_func(args.params[0])
+            block_ips(args.params[0])
