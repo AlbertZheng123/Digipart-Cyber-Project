@@ -3,6 +3,8 @@ import argparse
 import re
 
 
+#todo: Improve/Fix class description, there is no IpRules command, command is all lowercase,
+
 def is_valid_ip(ip):
     # Define the regular expression for a valid IP address
     ip_pattern = re.compile(r'^(\d{1,3}\.){3}\d{1,3}$')
@@ -17,6 +19,7 @@ def is_valid_ip(ip):
         return True
     return False
 
+
 class BlackListManager:
     """IpLinux is responsible for managing a list of IP addresses to be blacklisted on a linux remote server firewall。 Internally uses Linux commands IpTables/IpSet/IpRules
     This class provides functionalities to:
@@ -28,12 +31,15 @@ class BlackListManager:
     5. Displaying all results"""
 
     iplist = 'dp_blacklist'
+
     def __init__(self, ip_list_file):
         self.ip_list_file = ip_list_file
         self.valid_ip_count = 0
+        self.ips_in_ipset = 0
 
     def list_exists(self):
-        result = subprocess.run(['sudo', 'ipset', 'list', self.iplist], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        result = subprocess.run(['sudo', 'ipset', 'list', self.iplist], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                text=True)
         if "Name:" in result.stdout:
             print(f"{self.iplist} already exists")
             return False
@@ -58,9 +64,9 @@ class BlackListManager:
 
         with open(self.ip_list_file) as file:
             for ip in file:
-                if is_valid_ip(ip):
+                stripped_ip = ip.strip()
+                if is_valid_ip(stripped_ip):
                     self.valid_ip_count += 1
-                    stripped_ip = ip.strip()
                     result = subprocess.run(['sudo', 'ipset', 'test', self.iplist.encode(), stripped_ip.encode()],
                                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
                     if "is NOT in set" in result.stderr:
@@ -68,13 +74,13 @@ class BlackListManager:
                         print(f"{stripped_ip} added")
                         break
                     else:
-                        print("IP already in set")
+                        print(f"{stripped_ip} already in {self.iplist}")
         last_result = subprocess.run(['sudo', 'ipset', 'list', self.iplist], stdout=subprocess.PIPE,
                                      stderr=subprocess.PIPE, text=True)
         for line in last_result.stdout.splitlines():
             if line.startswith('Number of entries:'):
                 num_entries = line.split(':')[1].strip()
-                print(f"{num_entries} ips are in this list finally")
+                self.ips_in_ipset = int(num_entries)
                 break
 
     def add_rule(self):
@@ -93,14 +99,15 @@ class BlackListManager:
             return
 
     def display_results(self):
-        line_number = sum(1 for line in open(self.ip_list_file))
+        # line_number = sum(1 for line in open(self.ip_list_file))
         ip_rules_result = subprocess.run(['sudo', 'iptables', '-S'], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                          text=True)
         rules = ip_rules_result.stdout.splitlines()
         for rule in rules:
-            if self.iplist + " " in rule:
+            if "match-set " + self.iplist + " " in rule:
                 print(rule)
-        print("line numbers in doc is " + str(line_number))
+        print("line numbers in doc is " + str(self.valid_ip_count))
+        print(f"{self.ips_in_ipset} ips are in this list finally")
 
     def do_all(self):
         self.create_iplist()
@@ -109,7 +116,14 @@ class BlackListManager:
         self.display_results()
 
 
+def test_is_valid_ip():
+    print(is_valid_ip("2.3"))
+    print(is_valid_ip(" 100.23.21.24"))
+    print(is_valid_ip("a.b.c.2"))
+
+
 if __name__ == "__main__":
+    # test_is_valid_ip()
     parser = argparse.ArgumentParser(description='Run specific functions with parameters.')
     parser.add_argument('function', type=str, help='The function to call')
     parser.add_argument('params', nargs='*', help='The parameters to pass to the function')
@@ -123,6 +137,6 @@ if __name__ == "__main__":
 
     if args.function == 'block_ips':
         if len(args.params) != 1:
-            print("class_func requires 1 parameter")
+            print("block_ips requires 1 parameter")
         else:
             block_ips(args.params[0])
