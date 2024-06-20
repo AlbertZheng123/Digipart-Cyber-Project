@@ -3,15 +3,12 @@ import argparse
 import re
 
 
-#todo: Improve/Fix class description, there is no IpRules command, command is all lowercase,
+
 
 def is_valid_ip(ip):
-    # Define the regular expression for a valid IP address
     ip_pattern = re.compile(r'^(\d{1,3}\.){3}\d{1,3}$')
 
-    # Check if the string matches the pattern
     if ip_pattern.match(ip):
-        # Split the IP address into parts and check each part is between 0 and 255
         parts = ip.split('.')
         for part in parts:
             if not 0 <= int(part) <= 255:
@@ -21,10 +18,10 @@ def is_valid_ip(ip):
 
 
 class BlackListManager:
-    """IpLinux is responsible for managing a list of IP addresses to be blacklisted on a linux remote server firewall。 Internally uses Linux commands IpTables/IpSet/IpRules
+    """BlackListManager is responsible for managing a list of IP addresses to be blacklisted on a linux remote server firewall。 Internally uses Linux commands iptables/ipset
     This class provides functionalities to:
 
-    1. Create an IP List
+    1. Create an ip list
     2. Check if IP list exists
     3. Add an IP to the IP list
     4. Add a rule blocking the blacklist
@@ -99,7 +96,6 @@ class BlackListManager:
             return
 
     def display_results(self):
-        # line_number = sum(1 for line in open(self.ip_list_file))
         ip_rules_result = subprocess.run(['sudo', 'iptables', '-S'], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                          text=True)
         rules = ip_rules_result.stdout.splitlines()
@@ -107,7 +103,7 @@ class BlackListManager:
             if "match-set " + self.iplist + " " in rule:
                 print(rule)
         print("line numbers in doc is " + str(self.valid_ip_count))
-        print(f"{self.ips_in_ipset} ips are in this list finally")
+        print(f"{self.ips_in_ipset} ips are in this {self.ip_list_file}]")
 
     def do_all(self):
         self.create_iplist()
@@ -115,11 +111,6 @@ class BlackListManager:
         self.add_rule()
         self.display_results()
 
-
-def test_is_valid_ip():
-    print(is_valid_ip("2.3"))
-    print(is_valid_ip(" 100.23.21.24"))
-    print(is_valid_ip("a.b.c.2"))
 
 
 if __name__ == "__main__":
